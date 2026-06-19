@@ -1,0 +1,192 @@
+@import "tailwindcss";
+
+/* ============================================
+   MACHINED_EDC Brutalist Design System
+   Ported from original static site
+   ============================================ */
+
+:root {
+  /* Animation */
+  --fade-duration: 0.4s;
+}
+
+/* Tailwind v4 Theme Extension - Full brutalist tokens */
+@theme inline {
+  /* Colors - exact from original */
+  --color-on-error-container: #93000a;
+  --color-tertiary-fixed-dim: #c3c6ce;
+  --color-surface-container: #eeeeed;
+  --color-inverse-primary: #ffb59a;
+  --color-on-tertiary-fixed-variant: #43474e;
+  --color-surface-container-low: #f4f3f2;
+  --color-surface-tint: #a83900;
+  --color-tertiary-container: #71757c;
+  --color-tertiary: #585c63;
+  --color-on-surface-variant: #5a4138;
+  --color-on-primary-fixed-variant: #802a00;
+  --color-primary-fixed: #ffdbcf;
+  --color-error-container: #ffdad6;
+  --color-outline-variant: #e3bfb2;
+  --color-primary: #a43700;
+  --color-on-secondary-container: #646468;
+  --color-on-error: #ffffff;
+  --color-on-surface: #1a1c1c;
+  --color-on-background: #1a1c1c;
+  --color-secondary-fixed: #e3e2e6;
+  --color-on-primary-fixed: #380d00;
+  --color-surface-container-lowest: #ffffff;
+  --color-on-secondary-fixed: #1a1b1e;
+  --color-error: #ba1a1a;
+  --color-surface: #faf9f8;
+  --color-secondary: #5e5e62;
+  --color-secondary-fixed-dim: #c7c6ca;
+  --color-background: #faf9f8;
+  --color-inverse-on-surface: #f1f0ef;
+  --color-secondary-container: #e3e2e6;
+  --color-tertiary-fixed: #dfe2eb;
+  --color-inverse-surface: #2f3130;
+  --color-on-secondary: #ffffff;
+  --color-on-tertiary-container: #fdfcff;
+  --color-on-tertiary: #ffffff;
+  --color-on-primary-container: #fffbff;
+  --color-on-secondary-fixed-variant: #46474a;
+  --color-primary-container: #cd4700;
+  --color-primary-fixed-dim: #ffb59a;
+  --color-surface-container-highest: #e3e2e1;
+  --color-surface-bright: #faf9f8;
+  --color-surface-variant: #e3e2e1;
+  --color-outline: #8f7066;
+  --color-surface-container-high: #e9e8e7;
+  --color-on-tertiary-fixed: #181c22;
+  --color-on-primary: #ffffff;
+  --color-surface-dim: #dadad9;
+
+  /* Border Radius */
+  --radius: 0.125rem;
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.5rem;
+  --radius-full: 0.75rem;
+
+  /* Custom Spacing (used as px-gutter, py-section-gap etc) */
+  --spacing-margin-mobile: 16px;
+  --spacing-unit: 4px;
+  --spacing-gutter: 24px;
+  --spacing-section-gap: 96px;
+  --spacing-margin-desktop: 64px;
+
+  /* Font Families */
+  --font-body-md: var(--font-plus-jakarta);
+  --font-display-lg: var(--font-space-grotesk);
+  --font-label-caps: var(--font-space-grotesk);
+  --font-headline-md: var(--font-space-grotesk);
+  --font-headline-sm: var(--font-space-grotesk);
+  --font-spec-data: var(--font-jetbrains-mono);
+  --font-body-lg: var(--font-plus-jakarta);
+  --font-headline-lg-mobile: var(--font-space-grotesk);
+
+  /* Font Sizes + line heights + weights + tracking */
+  --text-body-md: 16px;
+  --text-body-md--line-height: 24px;
+  --text-body-md--font-weight: 400;
+
+  --text-display-lg: 48px;
+  --text-display-lg--line-height: 52px;
+  --text-display-lg--letter-spacing: -0.03em;
+  --text-display-lg--font-weight: 700;
+
+  --text-label-caps: 11px;
+  --text-label-caps--line-height: 16px;
+  --text-label-caps--letter-spacing: 0.15em;
+  --text-label-caps--font-weight: 700;
+
+  --text-headline-md: 28px;
+  --text-headline-md--line-height: 36px;
+  --text-headline-md--letter-spacing: -0.01em;
+  --text-headline-md--font-weight: 600;
+
+  --text-headline-sm: 20px;
+  --text-headline-sm--line-height: 28px;
+  --text-headline-sm--letter-spacing: 0;
+  --text-headline-sm--font-weight: 600;
+
+  --text-spec-data: 13px;
+  --text-spec-data--line-height: 20px;
+  --text-spec-data--font-weight: 400;
+
+  --text-body-lg: 18px;
+  --text-body-lg--line-height: 28px;
+  --text-body-lg--font-weight: 400;
+
+  --text-headline-lg-mobile: 32px;
+  --text-headline-lg-mobile--line-height: 40px;
+  --text-headline-lg-mobile--letter-spacing: -0.02em;
+  --text-headline-lg-mobile--font-weight: 700;
+}
+
+/* Base resets & body */
+html {
+  scroll-behavior: smooth;
+}
+
+html.light {
+  color-scheme: light;
+}
+
+body {
+  font-family: var(--font-plus-jakarta);
+  animation: fadeIn var(--fade-duration) ease-in-out forwards;
+  animation-delay: 0.15s;
+  opacity: 0;
+}
+
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+/* Custom Interactions from original */
+.btn-primary {
+  transition: background-color 100ms ease;
+}
+.btn-primary:hover {
+  background-color: #a43700; /* Signal Amber (Primary) */
+}
+
+.card-active-lock:focus-within {
+  border-color: #a43700;
+}
+.card-active-lock:focus-within::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 4px;
+  height: 4px;
+  background-color: #a43700;
+}
+
+/* Utility for the uppercase label caps style often used */
+.label-caps {
+  font-feature-settings: "tnum";
+}
+
+/* Ensure images in product cards behave like original */
+.product-image {
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.group:hover .product-image {
+  transform: scale(1.05);
+}
+
+/* Minimalist select and inputs to match */
+select,
+input[type="text"],
+input[type="search"] {
+  font-family: var(--font-jetbrains-mono);
+}
+
+/* Status chips etc can use existing tokens */
+.status-chip {
+  font-feature-settings: "tnum";
+}
