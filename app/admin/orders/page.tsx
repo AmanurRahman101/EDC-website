@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { OrderStatus } from "@prisma/client";
 import { formatTk } from "@/lib/money";
+import { requireAdmin } from "@/lib/auth";
 
 const PAYMENT_LABELS: Record<string, string> = {
   COD: "Cash on Delivery",
@@ -17,6 +18,7 @@ export default async function AdminOrders() {
 
   async function updateStatus(formData: FormData) {
     "use server";
+    await requireAdmin();
     const id = formData.get("id") as string;
     const status = formData.get("status") as OrderStatus;
     await db.order.update({ where: { id }, data: { status } });

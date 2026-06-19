@@ -3,12 +3,23 @@ import bcrypt from "bcrypt";
 import { redirect } from "next/navigation";
 import { Role } from "@prisma/client";
 
-export default function RegisterPage() {
+const ERROR_MESSAGES: Record<string, string> = {
+  invalid: "Please provide a valid email and a password with at least 6 characters.",
+  exists: "An account with this email already exists.",
+};
+
+export default async function RegisterPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const sp = await searchParams;
+
   async function registerAction(formData: FormData) {
     "use server";
 
-    const name = (formData.get("name") as string) || null;
-    const email = formData.get("email") as string;
+    const name = ((formData.get("name") as string) || "").trim() || null;
+    const email = ((formData.get("email") as string) || "").trim().toLowerCase();
     const password = formData.get("password") as string;
 
     if (!email || !password || password.length < 6) {
@@ -43,6 +54,12 @@ export default function RegisterPage() {
         </div>
 
         <form action={registerAction} className="space-y-4 bg-surface border border-secondary p-8">
+          {sp.error && ERROR_MESSAGES[sp.error] && (
+            <div className="text-error text-sm border border-error/30 bg-error-container/10 p-3">
+              {ERROR_MESSAGES[sp.error]}
+            </div>
+          )}
+
           <div>
             <label className="font-label-caps text-label-caps text-secondary block mb-1">NAME</label>
             <input name="name" type="text" className="w-full bg-surface-container-low border border-secondary px-3 py-2 text-on-surface focus:border-primary outline-none" placeholder="Alex Rivera" />

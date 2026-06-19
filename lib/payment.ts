@@ -7,14 +7,14 @@ export interface PaymentResult {
   message?: string;
 }
 
-export async function createPayment(_amountCents: number, _orderId: string): Promise<PaymentResult> {
+export async function createPayment(amountCents: number, orderId: string): Promise<PaymentResult> {
   // Simulate network latency
   await new Promise((r) => setTimeout(r, 300));
 
   // Always succeed for placeholder
   return {
     success: true,
-    transactionId: "pm_" + Math.random().toString(36).slice(2, 12),
+    transactionId: `pm_${orderId.slice(0, 8)}_${amountCents}`,
     message: "Payment authorized (placeholder)",
   };
 }

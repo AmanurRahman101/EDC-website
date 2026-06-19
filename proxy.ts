@@ -5,10 +5,14 @@ import { authConfig } from "@/lib/auth.config";
 // Build an Edge-safe Auth.js instance from the base config (no bcrypt / Prisma).
 const { auth } = NextAuth(authConfig);
 
+type AppUser = {
+  role?: "CUSTOMER" | "ADMIN";
+};
+
 export default auth((req) => {
   const { pathname } = req.nextUrl;
   const isLoggedIn = !!req.auth?.user;
-  const role = (req.auth?.user as any)?.role as "CUSTOMER" | "ADMIN" | undefined;
+  const role = (req.auth?.user as AppUser | undefined)?.role;
 
   if (pathname.startsWith("/admin")) {
     if (!isLoggedIn || role !== "ADMIN") {

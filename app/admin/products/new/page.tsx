@@ -2,6 +2,10 @@ import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { takaToMinor, TAKA } from "@/lib/money";
+import fs from "fs/promises";
+import path from "path";
+import { requireAdmin } from "@/lib/auth";
+import { ProductStatus } from "@prisma/client";
 
 function slugify(input: string) {
   return input
@@ -11,30 +15,45 @@ function slugify(input: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+async function saveProductImage(file: File) {
+  const bytes = await file.arrayBuffer();
+  const buffer = Buffer.from(bytes);
+  const filename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]+/g, "-")}`;
+  const uploadDir = path.join(process.cwd(), "public/products");
+  await fs.mkdir(uploadDir, { recursive: true });
+  await fs.writeFile(path.join(uploadDir, filename), buffer);
+  return `/products/${filename}`;
+}
+
 export default async function NewProduct() {
   const categories = await db.category.findMany();
 
   async function createProduct(formData: FormData) {
     "use server";
+    await requireAdmin();
 
     const name = formData.get("name") as string;
     const slug = ((formData.get("slug") as string) || slugify(name)).trim();
     const priceCents = takaToMinor(parseFloat(formData.get("price") as string));
     const categoryId = formData.get("categoryId") as string;
-    const status = formData.get("status") as any;
+    const status = formData.get("status") as ProductStatus;
     const stock = parseInt(formData.get("stock") as string, 10) || 0;
     const subtitle = formData.get("subtitle") as string || null;
     const description = formData.get("description") as string || null;
+    const featured = formData.get("featured") === "on";
 
     const product = await db.product.create({
-      data: { name, slug, priceCents, categoryId, status, stock, subtitle, description },
+      data: { name, slug, priceCents, categoryId, status, stock, subtitle, description, featured },
     });
 
     // optional primary image url
     const imageUrl = formData.get("imageUrl") as string;
-    if (imageUrl) {
+    const imageFile = formData.get("imageFile") as File;
+    const uploadedUrl = imageFile && imageFile.size > 0 ? await saveProductImage(imageFile) : null;
+    const primaryImageUrl = uploadedUrl || imageUrl;
+    if (primaryImageUrl) {
       await db.productImage.create({
-        data: { productId: product.id, url: imageUrl, position: 0 },
+        data: { productId: product.id, url: primaryImageUrl, position: 0 },
       });
     }
 
@@ -69,6 +88,15 @@ export default async function NewProduct() {
         <option value="OUT_OF_STOCK">OUT_OF_STOCK</option>
       </select>
 
+      <label className="flex items-center gap-2 text-sm text-secondary">
+        <input type="checkbox" name="featured" className="accent-primary" />
+        FEATURED PRODUCT
+      </label>
+
+      <div className="space-y-2 border border-secondary/40 p-3">
+        <label className="block text-xs text-secondary">Primary image upload</label>
+        <input type="file" name="imageFile" accept="image/*" className="text-sm" />
+      </div>
       <input name="imageUrl" placeholder="/products/xxx.png (optional)" className="w-full border p-2 bg-surface" />
 
       <button type="submit" className="px-6 py-2 bg-on-background text-on-primary">CREATE</button>

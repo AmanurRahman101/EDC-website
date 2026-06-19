@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createPayment } from "@/lib/payment";
-import { OrderStatus, PaymentMethod } from "@prisma/client";
+import { OrderStatus, PaymentMethod, ProductStatus } from "@prisma/client";
 import { shippingForDivisionDistrict } from "@/lib/shipping";
 import { isValidDivisionDistrict } from "@/lib/bd-locations";
 
@@ -35,13 +35,23 @@ export type CartItemWithProduct = {
     name: string;
     priceCents: number;
     slug: string;
+    status: ProductStatus;
+    stock: number;
     images: { url: string }[];
   };
 };
 
+function isPurchasable(product: { status: ProductStatus; stock: number }) {
+  return (
+    product.stock > 0 &&
+    product.status !== ProductStatus.OUT_OF_STOCK &&
+    product.status !== ProductStatus.BACKORDERED
+  );
+}
+
 export async function getCart(): Promise<{ items: CartItemWithProduct[]; totalCents: number; cartId: string | null }> {
   const session = await auth();
-  const userId = session?.user ? (session.user as any).id : null;
+  const userId = session?.user?.id ?? null;
 
   const cookieStore = await cookies();
   const sessionToken = userId ? undefined : cookieStore.get(GUEST_CART_COOKIE)?.value;
@@ -57,6 +67,8 @@ export async function getCart(): Promise<{ items: CartItemWithProduct[]; totalCe
               name: true,
               priceCents: true,
               slug: true,
+              status: true,
+              stock: true,
               images: { select: { url: true }, take: 1 },
             },
           },
@@ -70,7 +82,7 @@ export async function getCart(): Promise<{ items: CartItemWithProduct[]; totalCe
   const items: CartItemWithProduct[] = cart.items.map((it) => ({
     id: it.id,
     qty: it.qty,
-    product: it.product as any,
+    product: it.product,
   }));
 
   const totalCents = items.reduce((sum, it) => sum + it.product.priceCents * it.qty, 0);
@@ -78,12 +90,65 @@ export async function getCart(): Promise<{ items: CartItemWithProduct[]; totalCe
   return { items, totalCents, cartId: cart.id };
 }
 
+export async function mergeGuestCartIntoUserCart() {
+  const session = await auth();
+  const userId = session?.user?.id ?? null;
+  if (!userId) return;
+
+  const cookieStore = await cookies();
+  const guestToken = cookieStore.get(GUEST_CART_COOKIE)?.value;
+  if (!guestToken) return;
+
+  const guestCart = await db.cart.findUnique({
+    where: { sessionToken: guestToken },
+    include: { items: { include: { product: true } } },
+  });
+
+  if (!guestCart) {
+    cookieStore.delete(GUEST_CART_COOKIE);
+    return;
+  }
+
+  let userCart = await db.cart.findFirst({ where: { userId } });
+  if (!userCart) {
+    userCart = await db.cart.create({ data: { userId } });
+  }
+
+  for (const item of guestCart.items) {
+    if (!isPurchasable(item.product)) continue;
+
+    const existing = await db.cartItem.findUnique({
+      where: { cartId_productId: { cartId: userCart.id, productId: item.productId } },
+    });
+    const nextQty = Math.min(item.product.stock, (existing?.qty || 0) + item.qty);
+
+    if (existing) {
+      await db.cartItem.update({ where: { id: existing.id }, data: { qty: nextQty } });
+    } else {
+      await db.cartItem.create({
+        data: { cartId: userCart.id, productId: item.productId, qty: Math.min(item.product.stock, item.qty) },
+      });
+    }
+  }
+
+  await db.cartItem.deleteMany({ where: { cartId: guestCart.id } });
+  await db.cart.delete({ where: { id: guestCart.id } });
+  cookieStore.delete(GUEST_CART_COOKIE);
+  revalidatePath("/cart");
+}
+
 export async function addToCartAction(formData: FormData) {
   const productId = formData.get("productId") as string;
   if (!productId) return;
 
+  const product = await db.product.findUnique({
+    where: { id: productId },
+    select: { status: true, stock: true },
+  });
+  if (!product || !isPurchasable(product)) return;
+
   const session = await auth();
-  const userId = session?.user ? (session.user as any).id : null;
+  const userId = session?.user?.id ?? null;
 
   let sessionToken: string | undefined = undefined;
   if (!userId) {
@@ -105,7 +170,10 @@ export async function addToCartAction(formData: FormData) {
   });
 
   if (existing) {
-    await db.cartItem.update({ where: { id: existing.id }, data: { qty: existing.qty + 1 } });
+    await db.cartItem.update({
+      where: { id: existing.id },
+      data: { qty: Math.min(product.stock, existing.qty + 1) },
+    });
   } else {
     await db.cartItem.create({ data: { cartId: cart.id, productId, qty: 1 } });
   }
@@ -119,20 +187,47 @@ export async function updateCartItemAction(formData: FormData) {
   const qtyStr = formData.get("qty") as string;
   const qty = Math.max(1, parseInt(qtyStr, 10) || 1);
 
-  await db.cartItem.update({ where: { id: itemId }, data: { qty } });
+  const session = await auth();
+  const userId = session?.user?.id ?? null;
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get(GUEST_CART_COOKIE)?.value;
+
+  const item = await db.cartItem.findUnique({
+    where: { id: itemId },
+    include: { cart: true, product: { select: { stock: true } } },
+  });
+  if (!item) return;
+  if (userId ? item.cart.userId !== userId : item.cart.sessionToken !== sessionToken) return;
+
+  await db.cartItem.update({
+    where: { id: itemId },
+    data: { qty: Math.min(qty, Math.max(1, item.product.stock)) },
+  });
 
   revalidatePath("/cart");
 }
 
 export async function removeCartItemAction(formData: FormData) {
   const itemId = formData.get("itemId") as string;
+  const session = await auth();
+  const userId = session?.user?.id ?? null;
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get(GUEST_CART_COOKIE)?.value;
+
+  const item = await db.cartItem.findUnique({
+    where: { id: itemId },
+    include: { cart: true },
+  });
+  if (!item) return;
+  if (userId ? item.cart.userId !== userId : item.cart.sessionToken !== sessionToken) return;
+
   await db.cartItem.delete({ where: { id: itemId } });
   revalidatePath("/cart");
 }
 
 export async function clearCartAction() {
   const session = await auth();
-  const userId = session?.user ? (session.user as any).id : null;
+  const userId = session?.user?.id ?? null;
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get(GUEST_CART_COOKIE)?.value;
 
@@ -150,40 +245,25 @@ export async function checkoutAction(formData: FormData) {
   "use server";
 
   const session = await auth();
-  const userId = session?.user ? (session.user as any).id : null;
+  const userId = session?.user?.id ?? null;
   if (!userId) {
     // For now require login for checkout (can relax later)
     return { error: "Please sign in to complete checkout" };
   }
 
-  const cookieStore = await cookies();
-  const guestToken = cookieStore.get(GUEST_CART_COOKIE)?.value;
-
-  // Merge guest cart into user cart if exists (best effort)
-  if (guestToken) {
-    const guestCart = await db.cart.findUnique({ where: { sessionToken: guestToken }, include: { items: true } });
-    if (guestCart) {
-      let userCart = await db.cart.findFirst({ where: { userId } });
-      if (!userCart) {
-        userCart = await db.cart.create({ data: { userId } });
-      }
-      for (const item of guestCart.items) {
-        const existing = await db.cartItem.findUnique({ where: { cartId_productId: { cartId: userCart.id, productId: item.productId } } });
-        if (existing) {
-          await db.cartItem.update({ where: { id: existing.id }, data: { qty: existing.qty + item.qty } });
-        } else {
-          await db.cartItem.create({ data: { cartId: userCart.id, productId: item.productId, qty: item.qty } });
-        }
-      }
-      await db.cartItem.deleteMany({ where: { cartId: guestCart.id } });
-      // clear guest cookie
-      cookieStore.delete(GUEST_CART_COOKIE);
-    }
-  }
+  await mergeGuestCartIntoUserCart();
 
   const { items, totalCents: subtotalCents, cartId } = await getCart();
   if (!cartId || items.length === 0) {
     return { error: "Cart is empty" };
+  }
+  const unavailable = items.find((item) => !isPurchasable(item.product));
+  if (unavailable) {
+    return { error: `${unavailable.product.name} is no longer available` };
+  }
+  const overStock = items.find((item) => item.qty > item.product.stock);
+  if (overStock) {
+    return { error: `${overStock.product.name} only has ${overStock.product.stock} left in stock` };
   }
 
   // Read BD shipping fields
@@ -244,6 +324,10 @@ export async function checkoutAction(formData: FormData) {
         qty: item.qty,
       },
     });
+    await db.product.update({
+      where: { id: item.product.id },
+      data: { stock: { decrement: item.qty } },
+    });
   }
 
   // Placeholder payment (COD also confirmed as PAID for this demo)
@@ -259,6 +343,7 @@ export async function checkoutAction(formData: FormData) {
     await db.cartItem.deleteMany({ where: { cartId } });
 
     revalidatePath("/cart");
+    revalidatePath("/");
     revalidatePath("/account/orders");
 
     return { success: true, orderId: order.id };

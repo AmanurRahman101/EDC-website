@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 
 export async function toggleWishlist(productId: string) {
   const session = await auth();
-  const userId = (session?.user as any)?.id;
+  const userId = session?.user?.id;
   if (!userId) throw new Error("Must be logged in");
 
   const existing = await db.wishlistItem.findUnique({

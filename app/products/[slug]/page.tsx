@@ -23,7 +23,7 @@ export default async function ProductDetail({ params }: { params: Promise<{ slug
   if (!product) notFound();
 
   const user = await getCurrentUser();
-  const userId = (user as any)?.id;
+  const userId = user?.id;
   const inWishlist = userId
     ? !!(await db.wishlistItem.findUnique({
         where: { userId_productId: { userId, productId: product.id } },
@@ -33,14 +33,17 @@ export default async function ProductDetail({ params }: { params: Promise<{ slug
   async function handleWishlist() {
     "use server";
     const current = await getCurrentUser();
-    if (!(current as any)?.id) {
+    if (!current?.id) {
       redirect(`/login?redirect=/products/${slug}`);
     }
     await toggleWishlist(product!.id);
     revalidatePath(`/products/${slug}`);
   }
 
-  const isAvailable = product.status !== ProductStatus.OUT_OF_STOCK && product.status !== ProductStatus.BACKORDERED;
+  const isAvailable =
+    product.stock > 0 &&
+    product.status !== ProductStatus.OUT_OF_STOCK &&
+    product.status !== ProductStatus.BACKORDERED;
 
   const statusLabel = (s: ProductStatus) =>
     s === ProductStatus.LIMITED_RUN ? "LIMITED_RUN" : s === ProductStatus.IN_STOCK ? "IN_STOCK" : s === ProductStatus.BACKORDERED ? "BACKORDERED" : "OUT_OF_STOCK";
@@ -84,6 +87,9 @@ export default async function ProductDetail({ params }: { params: Promise<{ slug
 
             <div className="mt-4 text-3xl font-headline-sm text-on-surface">
               {formatTk(product.priceCents)}
+            </div>
+            <div className="mt-2 font-spec-data text-[11px] uppercase tracking-widest text-secondary">
+              {product.stock > 0 ? `${product.stock} units available` : "Out of stock"}
             </div>
 
             {product.description && (

@@ -1,5 +1,6 @@
 import { signIn } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { mergeGuestCartIntoUserCart } from "../actions/cart";
 
 export default async function LoginPage({
   searchParams,
@@ -11,7 +12,7 @@ export default async function LoginPage({
 
   async function loginAction(formData: FormData) {
     "use server";
-    const email = formData.get("email") as string;
+    const email = ((formData.get("email") as string) || "").trim().toLowerCase();
     const password = formData.get("password") as string;
     const dest = (formData.get("redirectTo") as string) || "/";
 
@@ -25,6 +26,7 @@ export default async function LoginPage({
       redirect(`/login?error=${encodeURIComponent("Invalid credentials")}${dest !== "/" ? `&redirect=${encodeURIComponent(dest)}` : ""}`);
     }
 
+    await mergeGuestCartIntoUserCart();
     redirect(dest.startsWith("/") ? dest : "/");
   }
 

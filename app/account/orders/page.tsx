@@ -5,7 +5,7 @@ import { formatTk } from "@/lib/money";
 
 export default async function OrdersList() {
   const user = await getCurrentUser();
-  const userId = (user as any)?.id;
+  const userId = user?.id;
 
   const orders = await db.order.findMany({
     where: { userId },

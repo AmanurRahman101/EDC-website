@@ -6,7 +6,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const isAdmin = (user as any).role === "ADMIN";
+  const isAdmin = user.role === "ADMIN";
 
   return (
     <div className="max-w-5xl mx-auto px-margin-mobile md:px-margin-desktop py-gutter">

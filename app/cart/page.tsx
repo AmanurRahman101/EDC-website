@@ -4,11 +4,17 @@ import { redirect } from "next/navigation";
 import { formatTk } from "@/lib/money";
 import { getCurrentUser } from "@/lib/auth";
 import CheckoutForm from "@/components/CheckoutForm";
+import { ProductStatus } from "@prisma/client";
 
-export default async function CartPage() {
+export default async function CartPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const sp = await searchParams;
   const { items, totalCents, cartId } = await getCart();
   const user = await getCurrentUser();
-  const isLoggedIn = !!(user as any)?.id;
+  const isLoggedIn = !!user?.id;
 
   async function handleCheckout(formData: FormData) {
     "use server";
@@ -16,7 +22,9 @@ export default async function CartPage() {
     if (result?.success && result.orderId) {
       redirect(`/account/orders/${result.orderId}?paid=true`);
     }
-    // On error, we could pass via search params but for simplicity just re-render
+    if (result?.error) {
+      redirect(`/cart?error=${encodeURIComponent(result.error)}`);
+    }
   }
 
   return (
@@ -61,10 +69,25 @@ export default async function CartPage() {
                         name="qty"
                         defaultValue={item.qty}
                         min={1}
+                        max={Math.max(1, item.product.stock)}
+                        disabled={item.product.stock <= 0}
                         className="w-16 bg-surface-container-low border border-secondary px-2 py-1 font-spec-data text-spec-data"
                       />
-                      <button type="submit" className="text-xs border px-2 py-1 border-secondary hover:bg-surface-container-high">UPDATE</button>
+                      <button
+                        type="submit"
+                        disabled={item.product.stock <= 0}
+                        className="text-xs border px-2 py-1 border-secondary hover:bg-surface-container-high disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        UPDATE
+                      </button>
                     </form>
+                    <div className="mt-1 text-[10px] uppercase tracking-widest text-secondary">
+                      {item.product.status === ProductStatus.BACKORDERED
+                        ? "Backordered"
+                        : item.product.stock > 0
+                        ? `${item.product.stock} in stock`
+                        : "Out of stock"}
+                    </div>
 
                     <form action={removeCartItemAction} className="mt-1">
                       <input type="hidden" name="itemId" value={item.id} />
@@ -88,12 +111,17 @@ export default async function CartPage() {
           <div className="md:col-span-1">
             <div className="bg-surface border border-secondary p-6 sticky top-4">
               <div className="font-label-caps text-label-caps text-secondary mb-4">CHECKOUT</div>
+              {sp.error && (
+                <div className="mb-4 text-error text-sm border border-error/30 bg-error-container/10 p-3">
+                  {sp.error}
+                </div>
+              )}
 
               {isLoggedIn ? (
                 <CheckoutForm
                   subtotalCents={totalCents}
                   action={handleCheckout}
-                  defaultName={(user as any)?.name || ""}
+                  defaultName={user?.name || ""}
                 />
               ) : (
                 <div className="space-y-4">

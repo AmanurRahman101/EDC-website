@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import fs from "fs/promises";
 import path from "path";
 import { takaToMinor, minorToTaka, formatTk, TAKA } from "@/lib/money";
+import { requireAdmin } from "@/lib/auth";
+import { ProductStatus } from "@prisma/client";
 
 function slugify(input: string) {
   return input
@@ -11,6 +13,16 @@ function slugify(input: string) {
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+async function saveProductImage(file: File) {
+  const bytes = await file.arrayBuffer();
+  const buffer = Buffer.from(bytes);
+  const filename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]+/g, "-")}`;
+  const uploadDir = path.join(process.cwd(), "public/products");
+  await fs.mkdir(uploadDir, { recursive: true });
+  await fs.writeFile(path.join(uploadDir, filename), buffer);
+  return `/products/${filename}`;
 }
 
 export default async function EditProduct({ params }: { params: Promise<{ id: string }> }) {
@@ -38,21 +50,23 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
 
   async function updateProduct(formData: FormData) {
     "use server";
+    await requireAdmin();
     const name = formData.get("name") as string;
     const rawSlug = (formData.get("slug") as string) || "";
     const slug = slugify(rawSlug || name);
     const priceCents = takaToMinor(parseFloat(formData.get("price") as string));
     const stock = parseInt(formData.get("stock") as string, 10) || 0;
-    const status = formData.get("status") as any;
+    const status = formData.get("status") as ProductStatus;
     const subtitle = (formData.get("subtitle") as string) || null;
     const description = (formData.get("description") as string) || null;
     const categoryId = formData.get("categoryId") as string;
+    const featured = formData.get("featured") === "on";
 
     const prev = await db.product.findUnique({ where: { id }, select: { slug: true } });
 
     await db.product.update({
       where: { id },
-      data: { name, slug, priceCents, stock, status, subtitle, description, categoryId },
+      data: { name, slug, priceCents, stock, status, subtitle, description, categoryId, featured },
     });
 
     revalidatePath("/");
@@ -64,19 +78,15 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
 
   async function uploadImage(formData: FormData) {
     "use server";
+    await requireAdmin();
     const file = formData.get("file") as File;
     if (!file || file.size === 0) return;
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const filename = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`;
-    const uploadDir = path.join(process.cwd(), "public/products");
-    await fs.mkdir(uploadDir, { recursive: true });
-    await fs.writeFile(path.join(uploadDir, filename), buffer);
+    const imageUrl = await saveProductImage(file);
 
     const count = await db.productImage.count({ where: { productId: id } });
     await db.productImage.create({
-      data: { productId: id, url: `/products/${filename}`, position: count },
+      data: { productId: id, url: imageUrl, position: count },
     });
 
     await revalidateStorefront(product!.slug);
@@ -84,6 +94,7 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
 
   async function deleteImage(formData: FormData) {
     "use server";
+    await requireAdmin();
     const imageId = formData.get("imageId") as string;
     await db.productImage.delete({ where: { id: imageId } });
     // Re-pack positions
@@ -96,6 +107,7 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
 
   async function setPrimaryImage(formData: FormData) {
     "use server";
+    await requireAdmin();
     const imageId = formData.get("imageId") as string;
     const others = await db.productImage.findMany({
       where: { productId: id, NOT: { id: imageId } },
@@ -110,6 +122,7 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
 
   async function addSpec(formData: FormData) {
     "use server";
+    await requireAdmin();
     const label = formData.get("label") as string;
     const value = formData.get("value") as string;
     if (label && value) {
@@ -121,6 +134,7 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
 
   async function deleteSpec(formData: FormData) {
     "use server";
+    await requireAdmin();
     const specId = formData.get("specId") as string;
     await db.productSpec.delete({ where: { id: specId } });
     await revalidateStorefront(product!.slug);
@@ -128,6 +142,7 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
 
   async function deleteProduct() {
     "use server";
+    await requireAdmin();
     const slug = product!.slug;
     await db.product.delete({ where: { id } });
     revalidatePath("/");
@@ -168,6 +183,11 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
         <select name="status" defaultValue={product.status} className="w-full border p-2 bg-surface">
           <option>IN_STOCK</option><option>LIMITED_RUN</option><option>BACKORDERED</option><option>OUT_OF_STOCK</option>
         </select>
+
+        <label className="flex items-center gap-2 text-sm text-secondary">
+          <input type="checkbox" name="featured" defaultChecked={product.featured} className="accent-primary" />
+          FEATURED PRODUCT
+        </label>
 
         <div className="text-xs text-secondary">Current price: {formatTk(product.priceCents)}</div>
 

@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { requireAdmin } from "@/lib/auth";
 
 function slugify(input: string) {
   return input
@@ -17,6 +18,7 @@ export default async function AdminCategories() {
 
   async function createCategory(formData: FormData) {
     "use server";
+    await requireAdmin();
     const name = formData.get("name") as string;
     const slug = slugify((formData.get("slug") as string) || name);
     await db.category.create({ data: { name, slug } });
@@ -26,6 +28,7 @@ export default async function AdminCategories() {
 
   async function updateCategory(formData: FormData) {
     "use server";
+    await requireAdmin();
     const id = formData.get("id") as string;
     const name = formData.get("name") as string;
     const slug = slugify((formData.get("slug") as string) || name);
@@ -36,6 +39,7 @@ export default async function AdminCategories() {
 
   async function deleteCategory(formData: FormData) {
     "use server";
+    await requireAdmin();
     const id = formData.get("id") as string;
     const count = await db.product.count({ where: { categoryId: id } });
     if (count > 0) {

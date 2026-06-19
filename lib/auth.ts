@@ -16,9 +16,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        const user = await db.user.findUnique({
-          where: { email: credentials.email as string },
-        });
+        const email = String(credentials.email).trim().toLowerCase();
+        const user = await db.user.findUnique({ where: { email } });
 
         if (!user) return null;
 
@@ -44,7 +43,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 // Helper to require admin in server components / actions
 export async function requireAdmin() {
   const session = await auth();
-  if (!session?.user || (session.user as any).role !== "ADMIN") {
+  if (!session?.user || session.user.role !== "ADMIN") {
     throw new Error("Unauthorized: admin only");
   }
   return session;

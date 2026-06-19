@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { ProductStatus } from "@prisma/client";
+import { Prisma, ProductStatus } from "@prisma/client";
 import { addToCartAction } from "./actions/cart";
 import SortSelect from "@/components/SortSelect";
 import { formatTk } from "@/lib/money";
@@ -12,6 +12,7 @@ const PAGE_SIZE = 9;
 interface SearchParams {
   category?: string;
   sort?: string;
+  status?: string;
   q?: string;
   page?: string;
 }
@@ -42,7 +43,7 @@ export default async function Storefront({
   const page = Math.max(1, parseInt(sp.page || "1", 10) || 1);
 
   // Build where clause
-  const where: any = {};
+  const where: Prisma.ProductWhereInput = {};
   if (categorySlug) {
     const cat = await db.category.findUnique({ where: { slug: categorySlug } });
     if (cat) where.categoryId = cat.id;
@@ -57,12 +58,15 @@ export default async function Storefront({
   if (sort === "in-stock") {
     where.status = { not: ProductStatus.OUT_OF_STOCK };
   }
+  if (sp.status === "limited") {
+    where.status = ProductStatus.LIMITED_RUN;
+  }
 
   // Count for header
   const totalCount = await db.product.count({ where });
 
   // Sorting
-  let orderBy: any = { createdAt: "desc" };
+  let orderBy: Prisma.ProductOrderByWithRelationInput | Prisma.ProductOrderByWithRelationInput[] = { createdAt: "desc" };
   if (sort === "price-desc") orderBy = { priceCents: "desc" };
   if (sort === "price-asc") orderBy = { priceCents: "asc" };
   if (sort === "in-stock") orderBy = [{ status: "asc" }, { createdAt: "desc" }];
@@ -143,7 +147,7 @@ export default async function Storefront({
             NEW_ARRIVALS
           </Link>
 
-          <Link href="/?category=knives&sort=price-desc" className="flex items-center gap-3 p-3 text-on-surface-variant hover:bg-surface-container-high transition-all duration-200 font-label-caps text-label-caps border-l-4 border-transparent">
+          <Link href="/?status=limited" className="flex items-center gap-3 p-3 text-on-surface-variant hover:bg-surface-container-high transition-all duration-200 font-label-caps text-label-caps border-l-4 border-transparent">
             <span className="material-symbols-outlined" data-icon="auto_awesome">auto_awesome</span>
             LIMITED_RUNS
           </Link>
@@ -235,7 +239,7 @@ export default async function Storefront({
               {products.map((p) => {
                 const img = p.images[0];
                 const specs = p.specs;
-                const disabled = p.status === ProductStatus.OUT_OF_STOCK || p.status === ProductStatus.BACKORDERED;
+                const disabled = p.stock <= 0 || p.status === ProductStatus.OUT_OF_STOCK || p.status === ProductStatus.BACKORDERED;
 
                 return (
                   <article key={p.id} className="bg-surface-container-lowest border border-secondary flex flex-col relative group card-active-lock" tabIndex={0}>
@@ -301,6 +305,9 @@ export default async function Storefront({
                           {formatTk(p.priceCents)}
                         </span>
                       </div>
+                      <div className="font-spec-data text-[11px] uppercase tracking-widest text-secondary">
+                        {p.stock > 0 ? `${p.stock} units available` : "Out of stock"}
+                      </div>
 
                       {/* Spec Table Lite */}
                       <div className="mt-auto pt-4 border-t border-secondary flex flex-col gap-1">
@@ -327,7 +334,7 @@ export default async function Storefront({
             <div className="mt-section-gap flex justify-center items-center gap-4">
               {page > 1 ? (
                 <Link
-                  href={`/?page=${page - 1}${categorySlug ? `&category=${categorySlug}` : ""}${sp.sort ? `&sort=${sp.sort}` : ""}${query ? `&q=${query}` : ""}`}
+                  href={`/?page=${page - 1}${categorySlug ? `&category=${categorySlug}` : ""}${sp.sort ? `&sort=${sp.sort}` : ""}${sp.status ? `&status=${sp.status}` : ""}${query ? `&q=${query}` : ""}`}
                   className="w-10 h-10 border border-secondary flex items-center justify-center text-on-surface hover:border-primary hover:text-primary transition-colors"
                 >
                   <span className="material-symbols-outlined" data-icon="chevron_left">chevron_left</span>
@@ -342,7 +349,7 @@ export default async function Storefront({
 
               {page < totalPages ? (
                 <Link
-                  href={`/?page=${page + 1}${categorySlug ? `&category=${categorySlug}` : ""}${sp.sort ? `&sort=${sp.sort}` : ""}${query ? `&q=${query}` : ""}`}
+                  href={`/?page=${page + 1}${categorySlug ? `&category=${categorySlug}` : ""}${sp.sort ? `&sort=${sp.sort}` : ""}${sp.status ? `&status=${sp.status}` : ""}${query ? `&q=${query}` : ""}`}
                   className="w-10 h-10 border border-secondary flex items-center justify-center text-on-surface hover:border-primary hover:text-primary transition-colors"
                 >
                   <span className="material-symbols-outlined" data-icon="chevron_right">chevron_right</span>
@@ -364,12 +371,12 @@ export default async function Storefront({
               <p className="font-spec-data text-spec-data text-on-surface max-w-sm">©2024 MACHINED_EDC. ENGINEERED FOR LONGEVITY.</p>
             </div>
             <div className="flex flex-col gap-2">
-              <a className="font-spec-data text-spec-data text-on-surface-variant hover:text-primary transition-all duration-100 uppercase tracking-wider" href="#">TERMS_OF_SERVICE</a>
-              <a className="font-spec-data text-spec-data text-on-surface-variant hover:text-primary transition-all duration-100 uppercase tracking-wider" href="#">PRIVACY_POLICY</a>
+              <Link className="font-spec-data text-spec-data text-on-surface-variant hover:text-primary transition-all duration-100 uppercase tracking-wider" href="/terms">TERMS_OF_SERVICE</Link>
+              <Link className="font-spec-data text-spec-data text-on-surface-variant hover:text-primary transition-all duration-100 uppercase tracking-wider" href="/privacy">PRIVACY_POLICY</Link>
             </div>
             <div className="flex flex-col gap-2">
-              <a className="font-spec-data text-spec-data text-on-surface-variant hover:text-primary transition-all duration-100 uppercase tracking-wider" href="#">SHIPPING_LOGISTICS</a>
-              <a className="font-spec-data text-spec-data text-on-surface-variant hover:text-primary transition-all duration-100 uppercase tracking-wider" href="#">REPAIR_PROGRAM</a>
+              <Link className="font-spec-data text-spec-data text-on-surface-variant hover:text-primary transition-all duration-100 uppercase tracking-wider" href="/shipping">SHIPPING_LOGISTICS</Link>
+              <Link className="font-spec-data text-spec-data text-on-surface-variant hover:text-primary transition-all duration-100 uppercase tracking-wider" href="/repair">REPAIR_PROGRAM</Link>
             </div>
           </div>
         </footer>

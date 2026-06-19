@@ -13,7 +13,7 @@ const PAYMENT_LABELS: Record<string, string> = {
 export default async function OrderDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await getCurrentUser();
-  const userId = (user as any)?.id;
+  const userId = user?.id;
 
   const order = await db.order.findFirst({
     where: { id, userId },

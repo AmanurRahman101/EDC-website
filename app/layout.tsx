@@ -40,6 +40,7 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${spaceGrotesk.variable} ${plusJakarta.variable} ${jetbrains.variable} h-full antialiased light`}
+      data-scroll-behavior="smooth"
     >
       <head>
         <link

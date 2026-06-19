@@ -22,6 +22,7 @@ export default async function AdminProducts() {
             <th className="p-3">Category</th>
             <th className="p-3">Price</th>
             <th className="p-3">Status</th>
+            <th className="p-3">Featured</th>
             <th className="p-3">Stock</th>
             <th className="p-3"></th>
           </tr>
@@ -33,6 +34,7 @@ export default async function AdminProducts() {
               <td className="p-3 text-secondary">{p.category.name}</td>
               <td className="p-3 font-spec-data">{formatTk(p.priceCents)}</td>
               <td className="p-3">{p.status}</td>
+              <td className="p-3">{p.featured ? "YES" : "NO"}</td>
               <td className="p-3">{p.stock}</td>
               <td className="p-3 text-right">
                 <Link href={`/admin/products/${p.id}`} className="underline">Edit</Link>
