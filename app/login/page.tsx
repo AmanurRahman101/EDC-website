@@ -16,17 +16,23 @@ export default async function LoginPage({
     const password = formData.get("password") as string;
     const dest = (formData.get("redirectTo") as string) || "/";
 
-    const res = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
-
-    if (res?.error) {
-      redirect(`/login?error=${encodeURIComponent("Invalid credentials")}${dest !== "/" ? `&redirect=${encodeURIComponent(dest)}` : ""}`);
+    try {
+      await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message === "NEXT_REDIRECT") throw err;
+      const errorMsg = "Invalid credentials";
+      redirect(`/login?error=${encodeURIComponent(errorMsg)}${dest !== "/" ? `&redirect=${encodeURIComponent(dest)}` : ""}`);
     }
 
-    await mergeGuestCartIntoUserCart();
+    try {
+      await mergeGuestCartIntoUserCart();
+    } catch (mergeErr) {
+      console.error("Failed to merge guest cart after login:", mergeErr);
+    }
     redirect(dest.startsWith("/") ? dest : "/");
   }
 

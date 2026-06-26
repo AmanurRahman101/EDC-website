@@ -33,8 +33,10 @@ export default async function NewProduct() {
     await requireAdmin();
 
     const name = formData.get("name") as string;
+    if (!name || !name.trim()) return { error: "Product name is required" };
     const slug = ((formData.get("slug") as string) || slugify(name)).trim();
     const priceCents = takaToMinor(parseFloat(formData.get("price") as string));
+    if (isNaN(priceCents) || priceCents < 0) return { error: "Invalid price" };
     const categoryId = formData.get("categoryId") as string;
     const status = formData.get("status") as ProductStatus;
     const stock = parseInt(formData.get("stock") as string, 10) || 0;
@@ -42,25 +44,37 @@ export default async function NewProduct() {
     const description = formData.get("description") as string || null;
     const featured = formData.get("featured") === "on";
 
-    const product = await db.product.create({
-      data: { name, slug, priceCents, categoryId, status, stock, subtitle, description, featured },
-    });
-
-    // optional primary image url
-    const imageUrl = formData.get("imageUrl") as string;
-    const imageFile = formData.get("imageFile") as File;
-    const uploadedUrl = imageFile && imageFile.size > 0 ? await saveProductImage(imageFile) : null;
-    const primaryImageUrl = uploadedUrl || imageUrl;
-    if (primaryImageUrl) {
-      await db.productImage.create({
-        data: { productId: product.id, url: primaryImageUrl, position: 0 },
+    let productId: string;
+    try {
+      const product = await db.product.create({
+        data: { name, slug, priceCents, categoryId, status, stock, subtitle, description, featured },
       });
+      productId = product.id;
+
+      // optional primary image url
+      const imageUrl = formData.get("imageUrl") as string;
+      const imageFile = formData.get("imageFile") as File;
+      let uploadedUrl: string | null = null;
+      try {
+        uploadedUrl = imageFile && imageFile.size > 0 ? await saveProductImage(imageFile) : null;
+      } catch (imgErr) {
+        console.error("Image upload failed during product creation:", imgErr);
+      }
+      const primaryImageUrl = uploadedUrl || imageUrl;
+      if (primaryImageUrl) {
+        await db.productImage.create({
+          data: { productId: product.id, url: primaryImageUrl, position: 0 },
+        });
+      }
+    } catch (err) {
+      console.error("createProduct failed:", err);
+      return { error: "Failed to create product. The slug may already exist." };
     }
 
     revalidatePath("/");
     revalidatePath(`/products/${slug}`);
     revalidatePath("/admin/products");
-    redirect(`/admin/products/${product.id}`);
+    redirect(`/admin/products/${productId}`);
   }
 
   return (

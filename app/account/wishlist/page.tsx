@@ -6,7 +6,10 @@ import { formatTk } from "@/lib/money";
 
 export default async function WishlistPage() {
   const user = await getCurrentUser();
-  const userId = user?.id;
+  if (!user?.id) {
+    return <div className="text-secondary">Please sign in to view your wishlist.</div>;
+  }
+  const userId = user.id;
 
   const items = await db.wishlistItem.findMany({
     where: { userId },

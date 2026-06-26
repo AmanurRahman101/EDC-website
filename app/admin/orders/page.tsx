@@ -16,12 +16,18 @@ export default async function AdminOrders() {
     orderBy: { createdAt: "desc" },
   });
 
-  async function updateStatus(formData: FormData) {
+  async function updateStatus(formData: FormData): Promise<{ error?: string } | void> {
     "use server";
     await requireAdmin();
     const id = formData.get("id") as string;
     const status = formData.get("status") as OrderStatus;
-    await db.order.update({ where: { id }, data: { status } });
+    if (!id || !status) return { error: "Missing order ID or status" };
+    try {
+      await db.order.update({ where: { id }, data: { status } });
+    } catch (err) {
+      console.error("updateStatus failed:", err);
+      return { error: "Failed to update order status" };
+    }
     revalidatePath("/admin/orders");
   }
 
