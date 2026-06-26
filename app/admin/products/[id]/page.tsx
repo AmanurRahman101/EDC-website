@@ -52,9 +52,11 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
     "use server";
     await requireAdmin();
     const name = formData.get("name") as string;
+    if (!name || !name.trim()) return { error: "Product name is required" };
     const rawSlug = (formData.get("slug") as string) || "";
     const slug = slugify(rawSlug || name);
     const priceCents = takaToMinor(parseFloat(formData.get("price") as string));
+    if (isNaN(priceCents) || priceCents < 0) return { error: "Invalid price" };
     const stock = parseInt(formData.get("stock") as string, 10) || 0;
     const status = formData.get("status") as ProductStatus;
     const subtitle = (formData.get("subtitle") as string) || null;
@@ -62,89 +64,123 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
     const categoryId = formData.get("categoryId") as string;
     const featured = formData.get("featured") === "on";
 
-    const prev = await db.product.findUnique({ where: { id }, select: { slug: true } });
+    try {
+      const prev = await db.product.findUnique({ where: { id }, select: { slug: true } });
 
-    await db.product.update({
-      where: { id },
-      data: { name, slug, priceCents, stock, status, subtitle, description, categoryId, featured },
-    });
+      await db.product.update({
+        where: { id },
+        data: { name, slug, priceCents, stock, status, subtitle, description, categoryId, featured },
+      });
 
-    revalidatePath("/");
-    if (prev?.slug && prev.slug !== slug) revalidatePath(`/products/${prev.slug}`);
-    revalidatePath(`/products/${slug}`);
-    revalidatePath("/admin/products");
+      revalidatePath("/");
+      if (prev?.slug && prev.slug !== slug) revalidatePath(`/products/${prev.slug}`);
+      revalidatePath(`/products/${slug}`);
+      revalidatePath("/admin/products");
+    } catch (err) {
+      console.error("updateProduct failed:", err);
+      return { error: "Failed to update product. The slug may conflict with another product." };
+    }
     redirect("/admin/products");
   }
 
-  async function uploadImage(formData: FormData) {
+  async function uploadImage(formData: FormData): Promise<{ error?: string } | void> {
     "use server";
     await requireAdmin();
     const file = formData.get("file") as File;
-    if (!file || file.size === 0) return;
+    if (!file || file.size === 0) return { error: "No file selected" };
 
-    const imageUrl = await saveProductImage(file);
+    try {
+      const imageUrl = await saveProductImage(file);
 
-    const count = await db.productImage.count({ where: { productId: id } });
-    await db.productImage.create({
-      data: { productId: id, url: imageUrl, position: count },
-    });
+      const count = await db.productImage.count({ where: { productId: id } });
+      await db.productImage.create({
+        data: { productId: id, url: imageUrl, position: count },
+      });
 
-    await revalidateStorefront(product!.slug);
+      await revalidateStorefront(product!.slug);
+    } catch (err) {
+      console.error("uploadImage failed:", err);
+      return { error: "Failed to upload image" };
+    }
   }
 
-  async function deleteImage(formData: FormData) {
+  async function deleteImage(formData: FormData): Promise<{ error?: string } | void> {
     "use server";
     await requireAdmin();
     const imageId = formData.get("imageId") as string;
-    await db.productImage.delete({ where: { id: imageId } });
-    // Re-pack positions
-    const remaining = await db.productImage.findMany({ where: { productId: id }, orderBy: { position: "asc" } });
-    await Promise.all(
-      remaining.map((img, i) => db.productImage.update({ where: { id: img.id }, data: { position: i } }))
-    );
-    await revalidateStorefront(product!.slug);
+    try {
+      await db.productImage.delete({ where: { id: imageId } });
+      // Re-pack positions
+      const remaining = await db.productImage.findMany({ where: { productId: id }, orderBy: { position: "asc" } });
+      await Promise.all(
+        remaining.map((img, i) => db.productImage.update({ where: { id: img.id }, data: { position: i } }))
+      );
+      await revalidateStorefront(product!.slug);
+    } catch (err) {
+      console.error("deleteImage failed:", err);
+      return { error: "Failed to delete image" };
+    }
   }
 
-  async function setPrimaryImage(formData: FormData) {
+  async function setPrimaryImage(formData: FormData): Promise<{ error?: string } | void> {
     "use server";
     await requireAdmin();
     const imageId = formData.get("imageId") as string;
-    const others = await db.productImage.findMany({
-      where: { productId: id, NOT: { id: imageId } },
-      orderBy: { position: "asc" },
-    });
-    await db.productImage.update({ where: { id: imageId }, data: { position: 0 } });
-    await Promise.all(
-      others.map((img, i) => db.productImage.update({ where: { id: img.id }, data: { position: i + 1 } }))
-    );
-    await revalidateStorefront(product!.slug);
+    try {
+      const others = await db.productImage.findMany({
+        where: { productId: id, NOT: { id: imageId } },
+        orderBy: { position: "asc" },
+      });
+      await db.productImage.update({ where: { id: imageId }, data: { position: 0 } });
+      await Promise.all(
+        others.map((img, i) => db.productImage.update({ where: { id: img.id }, data: { position: i + 1 } }))
+      );
+      await revalidateStorefront(product!.slug);
+    } catch (err) {
+      console.error("setPrimaryImage failed:", err);
+      return { error: "Failed to set primary image" };
+    }
   }
 
-  async function addSpec(formData: FormData) {
+  async function addSpec(formData: FormData): Promise<{ error?: string } | void> {
     "use server";
     await requireAdmin();
     const label = formData.get("label") as string;
     const value = formData.get("value") as string;
-    if (label && value) {
+    if (!label || !value) return { error: "Both label and value are required for a spec" };
+    try {
       const count = await db.productSpec.count({ where: { productId: id } });
       await db.productSpec.create({ data: { productId: id, label, value, position: count } });
+      await revalidateStorefront(product!.slug);
+    } catch (err) {
+      console.error("addSpec failed:", err);
+      return { error: "Failed to add spec" };
     }
-    await revalidateStorefront(product!.slug);
   }
 
-  async function deleteSpec(formData: FormData) {
+  async function deleteSpec(formData: FormData): Promise<{ error?: string } | void> {
     "use server";
     await requireAdmin();
     const specId = formData.get("specId") as string;
-    await db.productSpec.delete({ where: { id: specId } });
-    await revalidateStorefront(product!.slug);
+    try {
+      await db.productSpec.delete({ where: { id: specId } });
+      await revalidateStorefront(product!.slug);
+    } catch (err) {
+      console.error("deleteSpec failed:", err);
+      return { error: "Failed to delete spec" };
+    }
   }
 
   async function deleteProduct() {
     "use server";
     await requireAdmin();
     const slug = product!.slug;
-    await db.product.delete({ where: { id } });
+    try {
+      await db.product.delete({ where: { id } });
+    } catch (err) {
+      console.error("deleteProduct failed:", err);
+      return { error: "Failed to delete product. It may have existing orders referencing it." };
+    }
     revalidatePath("/");
     revalidatePath(`/products/${slug}`);
     revalidatePath("/admin/products");

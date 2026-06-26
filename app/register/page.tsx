@@ -26,21 +26,27 @@ export default async function RegisterPage({
       redirect("/register?error=invalid");
     }
 
-    const existing = await db.user.findUnique({ where: { email } });
-    if (existing) {
-      redirect("/register?error=exists");
+    try {
+      const existing = await db.user.findUnique({ where: { email } });
+      if (existing) {
+        redirect("/register?error=exists");
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      await db.user.create({
+        data: {
+          email,
+          name,
+          passwordHash,
+          role: Role.CUSTOMER,
+        },
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message === "NEXT_REDIRECT") throw err;
+      console.error("Registration failed:", err);
+      redirect("/register?error=invalid");
     }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    await db.user.create({
-      data: {
-        email,
-        name,
-        passwordHash,
-        role: Role.CUSTOMER,
-      },
-    });
 
     redirect("/login?registered=true");
   }

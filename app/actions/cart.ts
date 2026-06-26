@@ -137,107 +137,137 @@ export async function mergeGuestCartIntoUserCart() {
   revalidatePath("/cart");
 }
 
-export async function addToCartAction(formData: FormData) {
+export async function addToCartAction(formData: FormData): Promise<{ error?: string }> {
   const productId = formData.get("productId") as string;
-  if (!productId) return;
+  if (!productId) return { error: "Missing product ID" };
 
-  const product = await db.product.findUnique({
-    where: { id: productId },
-    select: { status: true, stock: true },
-  });
-  if (!product || !isPurchasable(product)) return;
-
-  const session = await auth();
-  const userId = session?.user?.id ?? null;
-
-  let sessionToken: string | undefined = undefined;
-  if (!userId) {
-    sessionToken = await getOrCreateGuestToken();
-  }
-
-  let cart = await db.cart.findFirst({
-    where: userId ? { userId } : { sessionToken },
-  });
-
-  if (!cart) {
-    cart = await db.cart.create({
-      data: userId ? { userId } : { sessionToken },
+  try {
+    const product = await db.product.findUnique({
+      where: { id: productId },
+      select: { status: true, stock: true },
     });
-  }
+    if (!product) return { error: "Product not found" };
+    if (!isPurchasable(product)) return { error: "Product is currently unavailable" };
 
-  const existing = await db.cartItem.findUnique({
-    where: { cartId_productId: { cartId: cart.id, productId } },
-  });
+    const session = await auth();
+    const userId = session?.user?.id ?? null;
 
-  if (existing) {
-    await db.cartItem.update({
-      where: { id: existing.id },
-      data: { qty: Math.min(product.stock, existing.qty + 1) },
+    let sessionToken: string | undefined = undefined;
+    if (!userId) {
+      sessionToken = await getOrCreateGuestToken();
+    }
+
+    let cart = await db.cart.findFirst({
+      where: userId ? { userId } : { sessionToken },
     });
-  } else {
-    await db.cartItem.create({ data: { cartId: cart.id, productId, qty: 1 } });
-  }
 
-  revalidatePath("/cart");
-  revalidatePath("/");
+    if (!cart) {
+      cart = await db.cart.create({
+        data: userId ? { userId } : { sessionToken },
+      });
+    }
+
+    const existing = await db.cartItem.findUnique({
+      where: { cartId_productId: { cartId: cart.id, productId } },
+    });
+
+    if (existing) {
+      await db.cartItem.update({
+        where: { id: existing.id },
+        data: { qty: Math.min(product.stock, existing.qty + 1) },
+      });
+    } else {
+      await db.cartItem.create({ data: { cartId: cart.id, productId, qty: 1 } });
+    }
+
+    revalidatePath("/cart");
+    revalidatePath("/");
+    return {};
+  } catch (err) {
+    console.error("addToCartAction failed:", err);
+    return { error: "Failed to add item to cart" };
+  }
 }
 
-export async function updateCartItemAction(formData: FormData) {
+export async function updateCartItemAction(formData: FormData): Promise<{ error?: string }> {
   const itemId = formData.get("itemId") as string;
   const qtyStr = formData.get("qty") as string;
   const qty = Math.max(1, parseInt(qtyStr, 10) || 1);
 
-  const session = await auth();
-  const userId = session?.user?.id ?? null;
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get(GUEST_CART_COOKIE)?.value;
+  try {
+    const session = await auth();
+    const userId = session?.user?.id ?? null;
+    const cookieStore = await cookies();
+    const sessionToken = cookieStore.get(GUEST_CART_COOKIE)?.value;
 
-  const item = await db.cartItem.findUnique({
-    where: { id: itemId },
-    include: { cart: true, product: { select: { stock: true } } },
-  });
-  if (!item) return;
-  if (userId ? item.cart.userId !== userId : item.cart.sessionToken !== sessionToken) return;
+    const item = await db.cartItem.findUnique({
+      where: { id: itemId },
+      include: { cart: true, product: { select: { stock: true } } },
+    });
+    if (!item) return { error: "Cart item not found" };
+    if (userId ? item.cart.userId !== userId : item.cart.sessionToken !== sessionToken) {
+      return { error: "Not authorized to modify this cart item" };
+    }
 
-  await db.cartItem.update({
-    where: { id: itemId },
-    data: { qty: Math.min(qty, Math.max(1, item.product.stock)) },
-  });
+    await db.cartItem.update({
+      where: { id: itemId },
+      data: { qty: Math.min(qty, Math.max(1, item.product.stock)) },
+    });
 
-  revalidatePath("/cart");
-}
-
-export async function removeCartItemAction(formData: FormData) {
-  const itemId = formData.get("itemId") as string;
-  const session = await auth();
-  const userId = session?.user?.id ?? null;
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get(GUEST_CART_COOKIE)?.value;
-
-  const item = await db.cartItem.findUnique({
-    where: { id: itemId },
-    include: { cart: true },
-  });
-  if (!item) return;
-  if (userId ? item.cart.userId !== userId : item.cart.sessionToken !== sessionToken) return;
-
-  await db.cartItem.delete({ where: { id: itemId } });
-  revalidatePath("/cart");
-}
-
-export async function clearCartAction() {
-  const session = await auth();
-  const userId = session?.user?.id ?? null;
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get(GUEST_CART_COOKIE)?.value;
-
-  const cart = await db.cart.findFirst({
-    where: userId ? { userId } : { sessionToken },
-  });
-  if (cart) {
-    await db.cartItem.deleteMany({ where: { cartId: cart.id } });
+    revalidatePath("/cart");
+    return {};
+  } catch (err) {
+    console.error("updateCartItemAction failed:", err);
+    return { error: "Failed to update cart item" };
   }
-  revalidatePath("/cart");
+}
+
+export async function removeCartItemAction(formData: FormData): Promise<{ error?: string }> {
+  const itemId = formData.get("itemId") as string;
+
+  try {
+    const session = await auth();
+    const userId = session?.user?.id ?? null;
+    const cookieStore = await cookies();
+    const sessionToken = cookieStore.get(GUEST_CART_COOKIE)?.value;
+
+    const item = await db.cartItem.findUnique({
+      where: { id: itemId },
+      include: { cart: true },
+    });
+    if (!item) return { error: "Cart item not found" };
+    if (userId ? item.cart.userId !== userId : item.cart.sessionToken !== sessionToken) {
+      return { error: "Not authorized to remove this cart item" };
+    }
+
+    await db.cartItem.delete({ where: { id: itemId } });
+    revalidatePath("/cart");
+    return {};
+  } catch (err) {
+    console.error("removeCartItemAction failed:", err);
+    return { error: "Failed to remove cart item" };
+  }
+}
+
+export async function clearCartAction(): Promise<{ error?: string }> {
+  try {
+    const session = await auth();
+    const userId = session?.user?.id ?? null;
+    const cookieStore = await cookies();
+    const sessionToken = cookieStore.get(GUEST_CART_COOKIE)?.value;
+
+    const cart = await db.cart.findFirst({
+      where: userId ? { userId } : { sessionToken },
+    });
+    if (cart) {
+      await db.cartItem.deleteMany({ where: { cartId: cart.id } });
+    }
+    revalidatePath("/cart");
+    return {};
+  } catch (err) {
+    console.error("clearCartAction failed:", err);
+    return { error: "Failed to clear cart" };
+  }
 }
 
 // Called after successful placeholder payment
@@ -247,11 +277,15 @@ export async function checkoutAction(formData: FormData) {
   const session = await auth();
   const userId = session?.user?.id ?? null;
   if (!userId) {
-    // For now require login for checkout (can relax later)
     return { error: "Please sign in to complete checkout" };
   }
 
-  await mergeGuestCartIntoUserCart();
+  try {
+    await mergeGuestCartIntoUserCart();
+  } catch (err) {
+    console.error("Failed to merge guest cart:", err);
+    // Continue with checkout even if merge fails
+  }
 
   const { items, totalCents: subtotalCents, cartId } = await getCart();
   if (!cartId || items.length === 0) {
@@ -297,57 +331,68 @@ export async function checkoutAction(formData: FormData) {
   const shippingCents = shippingForDivisionDistrict(shipDivision, shipDistrict);
   const totalCents = subtotalCents + shippingCents;
 
-  const order = await db.order.create({
-    data: {
-      userId,
-      status: OrderStatus.PENDING,
-      paymentMethod,
-      subtotalCents,
-      shippingCents,
-      totalCents,
-      shipName,
-      shipPhone,
-      shipDivision,
-      shipDistrict,
-      shipArea,
-      shipAddress,
-    },
-  });
-
-  for (const item of items) {
-    await db.orderItem.create({
+  try {
+    const order = await db.order.create({
       data: {
-        orderId: order.id,
-        productId: item.product.id,
-        nameSnapshot: item.product.name,
-        priceSnapshotCents: item.product.priceCents,
-        qty: item.qty,
+        userId,
+        status: OrderStatus.PENDING,
+        paymentMethod,
+        subtotalCents,
+        shippingCents,
+        totalCents,
+        shipName,
+        shipPhone,
+        shipDivision,
+        shipDistrict,
+        shipArea,
+        shipAddress,
       },
     });
-    await db.product.update({
-      where: { id: item.product.id },
-      data: { stock: { decrement: item.qty } },
-    });
+
+    for (const item of items) {
+      await db.orderItem.create({
+        data: {
+          orderId: order.id,
+          productId: item.product.id,
+          nameSnapshot: item.product.name,
+          priceSnapshotCents: item.product.priceCents,
+          qty: item.qty,
+        },
+      });
+      await db.product.update({
+        where: { id: item.product.id },
+        data: { stock: { decrement: item.qty } },
+      });
+    }
+
+    // Placeholder payment (COD also confirmed as PAID for this demo)
+    let payment;
+    try {
+      payment = await createPayment(totalCents, order.id);
+    } catch (paymentErr) {
+      console.error("Payment processing failed:", paymentErr);
+      return { error: "Payment processing failed. Your order has been saved and can be retried." };
+    }
+
+    if (payment.success) {
+      await db.order.update({
+        where: { id: order.id },
+        data: { status: OrderStatus.PAID },
+      });
+
+      // Clear the cart
+      await db.cartItem.deleteMany({ where: { cartId } });
+
+      revalidatePath("/cart");
+      revalidatePath("/");
+      revalidatePath("/account/orders");
+
+      return { success: true, orderId: order.id };
+    }
+
+    return { error: "Payment was not approved. Please try again or choose a different payment method." };
+  } catch (err) {
+    console.error("checkoutAction failed:", err);
+    return { error: "An unexpected error occurred during checkout. Please try again." };
   }
-
-  // Placeholder payment (COD also confirmed as PAID for this demo)
-  const payment = await createPayment(totalCents, order.id);
-
-  if (payment.success) {
-    await db.order.update({
-      where: { id: order.id },
-      data: { status: OrderStatus.PAID },
-    });
-
-    // Clear the cart
-    await db.cartItem.deleteMany({ where: { cartId } });
-
-    revalidatePath("/cart");
-    revalidatePath("/");
-    revalidatePath("/account/orders");
-
-    return { success: true, orderId: order.id };
-  }
-
-  return { error: "Payment failed (placeholder)" };
 }

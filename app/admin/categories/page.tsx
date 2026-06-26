@@ -16,37 +16,53 @@ export default async function AdminCategories() {
     include: { _count: { select: { products: true } } },
   });
 
-  async function createCategory(formData: FormData) {
+  async function createCategory(formData: FormData): Promise<{ error?: string } | void> {
     "use server";
     await requireAdmin();
     const name = formData.get("name") as string;
+    if (!name || !name.trim()) return { error: "Category name is required" };
     const slug = slugify((formData.get("slug") as string) || name);
-    await db.category.create({ data: { name, slug } });
-    revalidatePath("/admin/categories");
-    revalidatePath("/");
-  }
-
-  async function updateCategory(formData: FormData) {
-    "use server";
-    await requireAdmin();
-    const id = formData.get("id") as string;
-    const name = formData.get("name") as string;
-    const slug = slugify((formData.get("slug") as string) || name);
-    await db.category.update({ where: { id }, data: { name, slug } });
-    revalidatePath("/admin/categories");
-    revalidatePath("/");
-  }
-
-  async function deleteCategory(formData: FormData) {
-    "use server";
-    await requireAdmin();
-    const id = formData.get("id") as string;
-    const count = await db.product.count({ where: { categoryId: id } });
-    if (count > 0) {
-      // Don't delete a category that still has products (would cascade-delete them).
-      return;
+    try {
+      await db.category.create({ data: { name, slug } });
+    } catch (err) {
+      console.error("createCategory failed:", err);
+      return { error: "Failed to create category. The slug may already exist." };
     }
-    await db.category.delete({ where: { id } });
+    revalidatePath("/admin/categories");
+    revalidatePath("/");
+  }
+
+  async function updateCategory(formData: FormData): Promise<{ error?: string } | void> {
+    "use server";
+    await requireAdmin();
+    const id = formData.get("id") as string;
+    const name = formData.get("name") as string;
+    if (!name || !name.trim()) return { error: "Category name is required" };
+    const slug = slugify((formData.get("slug") as string) || name);
+    try {
+      await db.category.update({ where: { id }, data: { name, slug } });
+    } catch (err) {
+      console.error("updateCategory failed:", err);
+      return { error: "Failed to update category" };
+    }
+    revalidatePath("/admin/categories");
+    revalidatePath("/");
+  }
+
+  async function deleteCategory(formData: FormData): Promise<{ error?: string } | void> {
+    "use server";
+    await requireAdmin();
+    const id = formData.get("id") as string;
+    try {
+      const count = await db.product.count({ where: { categoryId: id } });
+      if (count > 0) {
+        return { error: `Cannot delete: ${count} product(s) still belong to this category. Move them first.` };
+      }
+      await db.category.delete({ where: { id } });
+    } catch (err) {
+      console.error("deleteCategory failed:", err);
+      return { error: "Failed to delete category" };
+    }
     revalidatePath("/admin/categories");
     revalidatePath("/");
   }
