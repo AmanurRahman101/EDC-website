@@ -19,6 +19,7 @@ async function getOrCreateGuestToken(): Promise<string> {
     token = crypto.randomUUID();
     cookieStore.set(GUEST_CART_COOKIE, token, {
       httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
       maxAge: COOKIE_MAX_AGE,

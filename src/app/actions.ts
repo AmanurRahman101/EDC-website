@@ -2,10 +2,18 @@
 
 import { PrismaClient } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { auth } from "@/lib/auth";
 
 const prisma = new PrismaClient();
 
+type AppUser = { id: string; role?: string };
+
 export async function createProduct(formData: FormData) {
+  const session = await auth();
+  if (!session?.user || (session.user as AppUser).role !== "ADMIN") {
+    throw new Error("Unauthorized");
+  }
+
   const name = formData.get("name") as string;
   const description = formData.get("description") as string;
   const price = parseFloat(formData.get("price") as string);
@@ -13,8 +21,6 @@ export async function createProduct(formData: FormData) {
   const category = formData.get("category") as string;
   const status = formData.get("status") as string;
   
-  // For now, we use a placeholder image or a URL provided by the user.
-  // In a full implementation, we would upload the file to Firebase Storage here.
   const image = formData.get("image") as string || "https://via.placeholder.com/400x400.png?text=New+Product";
 
   await prisma.product.create({
