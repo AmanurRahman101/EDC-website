@@ -1,21 +1,43 @@
 {
+<<<<<<< HEAD
   "name": "tempapp",
+=======
+  "name": "edc-website",
+>>>>>>> 2b4c19988bf757b77acbd7324522581fd434d52a
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+<<<<<<< HEAD
     "lint": "eslint"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
     "next": "16.2.9",
+=======
+    "lint": "eslint",
+    "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "db:migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@prisma/adapter-better-sqlite3": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "bcrypt": "^6.0.0",
+    "better-sqlite3": "^12.11.1",
+    "next": "16.2.9",
+    "next-auth": "^5.0.0-beta.31",
+    "prisma": "^7.8.0",
+>>>>>>> 2b4c19988bf757b77acbd7324522581fd434d52a
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+<<<<<<< HEAD
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -24,6 +46,16 @@
     "eslint-config-next": "16.2.9",
     "prisma": "^5.22.0",
     "tailwindcss": "^4",
+=======
+    "@types/bcrypt": "^6.0.0",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.9",
+    "tailwindcss": "^4",
+    "tsx": "^4.22.4",
+>>>>>>> 2b4c19988bf757b77acbd7324522581fd434d52a
     "typescript": "^5"
   }
 }
