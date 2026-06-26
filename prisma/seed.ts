@@ -34,11 +34,14 @@ async function main() {
     data: { slug: "lights", name: "LIGHTS" },
   });
 
-  // Admin user
-  const adminPassword = await bcrypt.hash("admin123", 10);
+  // Admin user — credentials come from env vars; fall back to random
+  // password so the seed never ships a guessable default.
+  const adminEmail = process.env.SEED_ADMIN_EMAIL || "admin@machinededc.com";
+  const adminPass  = process.env.SEED_ADMIN_PASSWORD || crypto.randomUUID();
+  const adminPassword = await bcrypt.hash(adminPass, 10);
   await prisma.user.create({
     data: {
-      email: "admin@machinededc.com",
+      email: adminEmail,
       name: "Admin",
       passwordHash: adminPassword,
       role: Role.ADMIN,
@@ -46,10 +49,12 @@ async function main() {
   });
 
   // Sample customer (optional)
-  const customerPass = await bcrypt.hash("customer123", 10);
+  const custEmail = process.env.SEED_CUSTOMER_EMAIL || "user@example.com";
+  const custPass  = process.env.SEED_CUSTOMER_PASSWORD || crypto.randomUUID();
+  const customerPass = await bcrypt.hash(custPass, 10);
   await prisma.user.create({
     data: {
-      email: "user@example.com",
+      email: custEmail,
       name: "Alex Rivera",
       passwordHash: customerPass,
       role: Role.CUSTOMER,
@@ -157,9 +162,10 @@ async function main() {
     ],
   });
 
-  console.log("✅ Seed complete.");
-  console.log("Admin login: admin@machinededc.com / admin123");
-  console.log("Customer: user@example.com / customer123");
+  console.log("Seed complete.");
+  console.log(`Admin login: ${adminEmail}`);
+  console.log(`Customer: ${custEmail}`);
+  console.log("(Passwords were read from SEED_ADMIN_PASSWORD / SEED_CUSTOMER_PASSWORD env vars, or generated randomly.)");
 }
 
 main()

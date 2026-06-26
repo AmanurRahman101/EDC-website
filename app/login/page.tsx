@@ -80,9 +80,7 @@ export default async function LoginPage({
           No account? <a href="/register" className="text-on-surface hover:text-primary underline">Create one</a>
         </p>
 
-        <p className="text-center mt-2 font-spec-data text-spec-data text-secondary">
-          Admin: admin@machinededc.com / admin123
-        </p>
+
       </div>
     </div>
   );

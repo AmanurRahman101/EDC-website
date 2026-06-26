@@ -2,7 +2,7 @@ const fs = require('fs');
 const html = fs.readFileSync('_legacy/index.html', 'utf8');
 const match = html.match(/tailwind\.config = ({[\s\S]*?})\n\s*</);
 if (!match) { console.error('No match'); process.exit(1); }
-const config = eval('(' + match[1] + ')');
+const config = new Function('return (' + match[1] + ')')();
 
 let css = '@import "tailwindcss";\n\n@theme {\n';
 
