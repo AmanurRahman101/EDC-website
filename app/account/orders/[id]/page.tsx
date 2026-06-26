@@ -3,12 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { formatTk } from "@/lib/money";
-
-const PAYMENT_LABELS: Record<string, string> = {
-  COD: "Cash on Delivery",
-  BKASH: "bKash",
-  NAGAD: "Nagad",
-};
+import { PAYMENT_LABELS } from "@/lib/constants";
 
 export default async function OrderDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

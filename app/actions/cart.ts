@@ -8,6 +8,8 @@ import { createPayment } from "@/lib/payment";
 import { OrderStatus, PaymentMethod, ProductStatus } from "@prisma/client";
 import { shippingForDivisionDistrict } from "@/lib/shipping";
 import { isValidDivisionDistrict } from "@/lib/bd-locations";
+import { isPurchasable } from "@/lib/product";
+import { isValidBdMobile } from "@/lib/validation";
 
 const GUEST_CART_COOKIE = "guest_cart_token";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
@@ -40,14 +42,6 @@ export type CartItemWithProduct = {
     images: { url: string }[];
   };
 };
-
-function isPurchasable(product: { status: ProductStatus; stock: number }) {
-  return (
-    product.stock > 0 &&
-    product.status !== ProductStatus.OUT_OF_STOCK &&
-    product.status !== ProductStatus.BACKORDERED
-  );
-}
 
 export async function getCart(): Promise<{ items: CartItemWithProduct[]; totalCents: number; cartId: string | null }> {
   const session = await auth();
@@ -182,22 +176,34 @@ export async function addToCartAction(formData: FormData) {
   revalidatePath("/");
 }
 
+async function getCartOwner() {
+  const session = await auth();
+  const userId = session?.user?.id ?? null;
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get(GUEST_CART_COOKIE)?.value;
+  return { userId, sessionToken };
+}
+
+function isCartItemOwner(
+  cart: { userId: string | null; sessionToken: string | null },
+  owner: { userId: string | null; sessionToken: string | undefined },
+): boolean {
+  return owner.userId ? cart.userId === owner.userId : cart.sessionToken === owner.sessionToken;
+}
+
 export async function updateCartItemAction(formData: FormData) {
   const itemId = formData.get("itemId") as string;
   const qtyStr = formData.get("qty") as string;
   const qty = Math.max(1, parseInt(qtyStr, 10) || 1);
 
-  const session = await auth();
-  const userId = session?.user?.id ?? null;
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get(GUEST_CART_COOKIE)?.value;
+  const owner = await getCartOwner();
 
   const item = await db.cartItem.findUnique({
     where: { id: itemId },
     include: { cart: true, product: { select: { stock: true } } },
   });
   if (!item) return;
-  if (userId ? item.cart.userId !== userId : item.cart.sessionToken !== sessionToken) return;
+  if (!isCartItemOwner(item.cart, owner)) return;
 
   await db.cartItem.update({
     where: { id: itemId },
@@ -209,30 +215,24 @@ export async function updateCartItemAction(formData: FormData) {
 
 export async function removeCartItemAction(formData: FormData) {
   const itemId = formData.get("itemId") as string;
-  const session = await auth();
-  const userId = session?.user?.id ?? null;
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get(GUEST_CART_COOKIE)?.value;
+  const owner = await getCartOwner();
 
   const item = await db.cartItem.findUnique({
     where: { id: itemId },
     include: { cart: true },
   });
   if (!item) return;
-  if (userId ? item.cart.userId !== userId : item.cart.sessionToken !== sessionToken) return;
+  if (!isCartItemOwner(item.cart, owner)) return;
 
   await db.cartItem.delete({ where: { id: itemId } });
   revalidatePath("/cart");
 }
 
 export async function clearCartAction() {
-  const session = await auth();
-  const userId = session?.user?.id ?? null;
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get(GUEST_CART_COOKIE)?.value;
+  const owner = await getCartOwner();
 
   const cart = await db.cart.findFirst({
-    where: userId ? { userId } : { sessionToken },
+    where: owner.userId ? { userId: owner.userId } : { sessionToken: owner.sessionToken },
   });
   if (cart) {
     await db.cartItem.deleteMany({ where: { cartId: cart.id } });
@@ -275,7 +275,7 @@ export async function checkoutAction(formData: FormData) {
   const shipAddress = ((formData.get("address") as string) || "").trim();
 
   // Validate (never trust the client)
-  if (!/^01[3-9]\d{8}$/.test(shipPhone)) {
+  if (!isValidBdMobile(shipPhone)) {
     return { error: "Please provide a valid Bangladeshi mobile number" };
   }
   if (!isValidDivisionDistrict(shipDivision, shipDistrict)) {

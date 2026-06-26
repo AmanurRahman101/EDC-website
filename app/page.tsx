@@ -4,6 +4,7 @@ import { Prisma, ProductStatus } from "@prisma/client";
 import { addToCartAction } from "./actions/cart";
 import SortSelect from "@/components/SortSelect";
 import { formatTk } from "@/lib/money";
+import { statusLabel, statusChipClass } from "@/lib/product";
 
 type SortOption = "newest" | "price-desc" | "price-asc" | "in-stock";
 
@@ -87,23 +88,6 @@ export default async function Storefront({
 
   // For sidebar active states (simplified)
   const currentCat = categorySlug || "all";
-
-  // Status chip styling
-  function statusChip(status: ProductStatus) {
-    if (status === ProductStatus.LIMITED_RUN) {
-      return "bg-primary text-on-primary";
-    }
-    if (status === ProductStatus.IN_STOCK) {
-      return "bg-surface-tint text-on-primary";
-    }
-    if (status === ProductStatus.BACKORDERED) {
-      return "bg-secondary text-on-primary";
-    }
-    return "bg-outline text-on-primary";
-  }
-
-  const statusLabel = (s: ProductStatus) =>
-    s === ProductStatus.LIMITED_RUN ? "LIMITED_RUN" : s === ProductStatus.IN_STOCK ? "IN_STOCK" : s === ProductStatus.BACKORDERED ? "BACKORDERED" : "OUT_OF_STOCK";
 
   const currentSortValue =
     sort === "price-desc" ? "PRICE_DESCENDING" :
@@ -244,7 +228,7 @@ export default async function Storefront({
                 return (
                   <article key={p.id} className="bg-surface-container-lowest border border-secondary flex flex-col relative group card-active-lock" tabIndex={0}>
                     {/* Status Chip */}
-                    <div className={`absolute top-4 left-4 z-10 px-2 py-1 font-label-caps text-label-caps text-on-primary ${statusChip(p.status)}`}>
+                    <div className={`absolute top-4 left-4 z-10 px-2 py-1 font-label-caps text-label-caps text-on-primary ${statusChipClass(p.status)}`}>
                       {statusLabel(p.status)}
                     </div>
 

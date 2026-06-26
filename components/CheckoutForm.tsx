@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { DIVISION_NAMES, districtsForDivision } from "@/lib/bd-locations";
 import { shippingForDivisionDistrict, shippingLabel } from "@/lib/shipping";
 import { formatTk } from "@/lib/money";
+import { isValidBdMobile } from "@/lib/validation";
 
 type CheckoutFormProps = {
   subtotalCents: number;
@@ -29,7 +30,7 @@ export default function CheckoutForm({ subtotalCents, action, defaultName }: Che
     : null;
   const totalCents = subtotalCents + (shippingCents ?? 0);
 
-  const phoneValid = /^01[3-9]\d{8}$/.test(phone);
+  const phoneValid = isValidBdMobile(phone);
 
   return (
     <form action={action} className="space-y-4">

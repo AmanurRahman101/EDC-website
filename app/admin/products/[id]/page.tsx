@@ -1,29 +1,11 @@
 import { db } from "@/lib/db";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import fs from "fs/promises";
-import path from "path";
 import { takaToMinor, minorToTaka, formatTk, TAKA } from "@/lib/money";
 import { requireAdmin } from "@/lib/auth";
 import { ProductStatus } from "@prisma/client";
-
-function slugify(input: string) {
-  return input
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-async function saveProductImage(file: File) {
-  const bytes = await file.arrayBuffer();
-  const buffer = Buffer.from(bytes);
-  const filename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]+/g, "-")}`;
-  const uploadDir = path.join(process.cwd(), "public/products");
-  await fs.mkdir(uploadDir, { recursive: true });
-  await fs.writeFile(path.join(uploadDir, filename), buffer);
-  return `/products/${filename}`;
-}
+import { slugify } from "@/lib/slugify";
+import { saveProductImage } from "@/lib/upload";
 
 export default async function EditProduct({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

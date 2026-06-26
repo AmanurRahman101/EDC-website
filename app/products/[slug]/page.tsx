@@ -3,10 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { addToCartAction } from "../../actions/cart";
-import { ProductStatus } from "@prisma/client";
 import { formatTk } from "@/lib/money";
 import { getCurrentUser } from "@/lib/auth";
 import { toggleWishlist } from "../../actions/wishlist";
+import { isPurchasable, statusLabel, statusChipClass } from "@/lib/product";
 
 export default async function ProductDetail({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -40,20 +40,7 @@ export default async function ProductDetail({ params }: { params: Promise<{ slug
     revalidatePath(`/products/${slug}`);
   }
 
-  const isAvailable =
-    product.stock > 0 &&
-    product.status !== ProductStatus.OUT_OF_STOCK &&
-    product.status !== ProductStatus.BACKORDERED;
-
-  const statusLabel = (s: ProductStatus) =>
-    s === ProductStatus.LIMITED_RUN ? "LIMITED_RUN" : s === ProductStatus.IN_STOCK ? "IN_STOCK" : s === ProductStatus.BACKORDERED ? "BACKORDERED" : "OUT_OF_STOCK";
-
-  const chipClass =
-    product.status === ProductStatus.LIMITED_RUN
-      ? "bg-primary text-on-primary"
-      : product.status === ProductStatus.IN_STOCK
-      ? "bg-surface-tint text-on-primary"
-      : "bg-secondary text-on-primary";
+  const isAvailable = isPurchasable(product);
 
   return (
     <div className="min-h-screen bg-background">
@@ -78,7 +65,7 @@ export default async function ProductDetail({ params }: { params: Promise<{ slug
 
           {/* Info */}
           <div className="flex flex-col">
-            <div className={`self-start mb-3 px-3 py-1 font-label-caps text-label-caps text-on-primary ${chipClass}`}>
+            <div className={`self-start mb-3 px-3 py-1 font-label-caps text-label-caps text-on-primary ${statusChipClass(product.status)}`}>
               {statusLabel(product.status)}
             </div>
 
