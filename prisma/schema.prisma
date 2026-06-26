@@ -1,10 +1,5 @@
-<<<<<<< HEAD
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-=======
 // MACHINED_EDC E-commerce Prisma Schema
 // SQLite for dev (switch provider + DATABASE_URL for Postgres prod)
->>>>>>> 2b4c19988bf757b77acbd7324522581fd434d52a
 
 generator client {
   provider = "prisma-client-js"
@@ -12,29 +7,6 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-<<<<<<< HEAD
-  url      = "file:./dev.db"
-}
-
-model Product {
-  id          String   @id @default(cuid())
-  name        String
-  description String
-  price       Float
-  stock       Int
-  image       String   // URL or path to the image
-  status      String   // e.g. "IN_STOCK", "LIMITED_RUN", "BACKORDERED"
-  category    String   // e.g. "KNIFE", "LIGHT", "TOOL"
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-model Admin {
-  id        String   @id @default(cuid())
-  username  String   @unique
-  password  String   // Hashed
-  createdAt DateTime @default(now())
-=======
 }
 
 enum Role {
@@ -205,5 +177,4 @@ model WishlistItem {
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([userId, productId])
->>>>>>> 2b4c19988bf757b77acbd7324522581fd434d52a
 }

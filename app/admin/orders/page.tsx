@@ -3,12 +3,7 @@ import { revalidatePath } from "next/cache";
 import { OrderStatus } from "@prisma/client";
 import { formatTk } from "@/lib/money";
 import { requireAdmin } from "@/lib/auth";
-
-const PAYMENT_LABELS: Record<string, string> = {
-  COD: "Cash on Delivery",
-  BKASH: "bKash",
-  NAGAD: "Nagad",
-};
+import { PAYMENT_LABELS } from "@/lib/constants";
 
 export default async function AdminOrders() {
   const orders = await db.order.findMany({
